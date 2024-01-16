@@ -5,9 +5,12 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.enums.parse_mode import ParseMode
 from aiogram.types import Message, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+import sqlite3
+from datetime import datetime
 
 router = Router()
-
+connection = sqlite3.connect('chat_bot.db')
+cursor = connection.cursor()
 
 class Form(StatesGroup):
     start_check = State()
@@ -39,6 +42,18 @@ class Form(StatesGroup):
 
 @router.message(CommandStart())
 async def command_start(message: types.Message, state: FSMContext) -> None:
+    await state.update_data(username=message.from_user.username)
+    await state.update_data(user_id=message.from_user.id)
+    data = await state.get_data()
+    # user_id = data['user_id']
+    # username = data['username']
+    current_time = f"{datetime.now()}"
+    check_id = cursor.execute('SELECT * FROM Users WHERE user_id=?', (data['user_id'],)).fetchone()
+    if check_id is None:
+        cursor.execute('INSERT INTO Users (user_id, username, date) VALUES (?, ?, ?)',
+                       (data['user_id'], data['username'], current_time[:19]))
+        connection.commit()
+
     kb = [
         [
             types.KeyboardButton(text="Связаться с менеджером📞"),
@@ -65,23 +80,35 @@ async def command_start(message: types.Message, state: FSMContext) -> None:
 @router.callback_query(F.data == "inline_manager_pressed")
 async def process_buttons_inline_manager_press(callback: types.CallbackQuery, bot: Bot, state: FSMContext):
     await callback.answer("🛫")
-    # inline_start = InlineKeyboardButton(
-    #     text="Хочу оставить заявку",
-    #     callback_data="inline_start_pressed"
-    # )
-    # keyboard = InlineKeyboardMarkup(inline_keyboard=[[inline_start]])
-    await bot.send_message(chat_id=callback.from_user.id,
-                           text="Для связи с вами нам потребуется:\n\n"
-                                "1️⃣Ваше имя. Подскажите, как мы можем к вам обращаться?"  # reply_markup=keyboard
-                           )
     await state.set_state(Form.name_alt)
+    await state.update_data(username=callback.from_user.username)
+    await state.update_data(user_id=callback.from_user.id)
+    data = await state.get_data()
+    current_time = f"{datetime.now()}"
+    check_id = cursor.execute('SELECT * FROM Users WHERE user_id=?', (data['user_id'],)).fetchone()
+    if check_id is None:
+        cursor.execute('INSERT INTO Users (user_id, username, date) VALUES (?, ?, ?)',
+                       (data['user_id'], data['username'], current_time[:19]))
+    await callback.message.answer(
+                                  text="Для связи с вами нам потребуется:\n\n"
+                                       "1️⃣Ваше имя. Подскажите, как мы можем к вам обращаться?"
+                                  )
 
 
 @router.callback_query(F.data == "inline_start_pressed")
 async def process_buttons_inline_start_press(callback: types.CallbackQuery, state: FSMContext, bot: Bot):
     await state.set_state(Form.name)
+    await state.update_data(username=callback.from_user.username)
+    await state.update_data(user_id=callback.from_user.id)
+    data = await state.get_data()
+    current_time = f"{datetime.now()}"
+    check_id = cursor.execute('SELECT * FROM Users WHERE user_id=?', (data['user_id'],)).fetchone()
+    if check_id is None:
+        cursor.execute('INSERT INTO Users (user_id, username, date) VALUES (?, ?, ?)',
+                       (data['user_id'], data['username'], current_time[:19]))
+        connection.commit()
     await callback.answer("🛫")
-    await bot.send_message(chat_id=callback.from_user.id,
+    await callback.message.answer(
                            text=f"Давайте приступим👋🏼 Подскажите, как я могу к вам обращаться?",
                            )
 
@@ -95,11 +122,6 @@ async def process_start_check(message: Message, state: FSMContext) -> None:
         await state.set_state(Form.name)
         await message.answer("Давайте приступим👋🏼 Подскажите, как я могу к вам обращаться?")
     else:
-        # inline_start = InlineKeyboardButton(
-        #    text="Хочу оставить заявку.",
-        #    callback_data="inline_start_pressed"
-        # )
-        # keyboard = InlineKeyboardMarkup(inline_keyboard=[[inline_start]])
         await message.answer("Для связи с вами нам потребуется:\n\n"
                              "1️⃣Ваше имя. Подскажите, как мы можем к вам обращаться?")  # reply_markup=keyboard
         await state.set_state(Form.name_alt)
@@ -109,6 +131,9 @@ async def process_start_check(message: Message, state: FSMContext) -> None:
 async def process_name_alt(message: Message, state: FSMContext) -> None:
     await state.update_data(name_alt=message.text)
     data = await state.get_data()
+    cursor.execute('UPDATE Users SET name =? WHERE user_id =?;',
+                   (data['name_alt'], data['user_id']))
+    connection.commit()
     await message.answer("Спасибо!)\n\n"
                          "2️⃣А также ваш номер телефона. Напишите, пожалуйста, его в формате 8хххххххххх")
     await state.set_state(Form.numbers_alt)
@@ -118,6 +143,10 @@ async def process_name_alt(message: Message, state: FSMContext) -> None:
 async def process_numbers_atl(message: types.Message, state: FSMContext, bot: Bot) -> None:
     await state.update_data(numbers_alt=message.text)
     data = await state.get_data()
+    cursor.execute('UPDATE Users SET number =? WHERE user_id =?;',
+                   (data['numbers_alt'], data['user_id']))
+    connection.commit()
+
     if data['numbers_alt'].isdigit() and len(data['numbers_alt']) == 11:
         inline_start = InlineKeyboardButton(
             text="Оставить еще одну заявку",
@@ -169,6 +198,9 @@ async def process_name(message: Message, state: FSMContext, ) -> None:
     await state.set_state(Form.depart_city)
     await state.update_data(name=message.text)
     data = await state.get_data()
+    cursor.execute('UPDATE Users SET name =? WHERE user_id =?;',
+                   (data['name'], data['user_id']))
+    connection.commit()
     await message.answer(
         f"{message.text}, из какого города планируете вылет?",
     )
@@ -181,6 +213,9 @@ async def process_depart_city(message: Message, state: FSMContext) -> None:
     await state.set_state(Form.resort)
     await state.update_data(depart_city=message.text)
     data = await state.get_data()
+    cursor.execute('UPDATE Users SET depart_city =? WHERE user_id =?;',
+                   (data['depart_city'], data['user_id']))
+    connection.commit()
     await message.answer(
         "Какое направление для отдыха рассматриваете? Напишите ниже все интересующие вас варианты🖋️\n\n"
         "Наши эксперты по турам включат в подборку несколько предложений по каждому!)"
@@ -194,6 +229,9 @@ async def process_resort(message: Message, state: FSMContext) -> None:
     await state.set_state(Form.quan)
     await state.update_data(resort=message.text)
     data = await state.get_data()
+    cursor.execute('UPDATE Users SET resort =? WHERE user_id =?;',
+                   (data['resort'], data['user_id']))
+    connection.commit()
     await message.answer(
         "Отлично!) Сколько человек отправятся в путешествие?👩🏻🧑🏼‍🦱 Будут ли с вами дети, сколько?👧🏼"
     )
@@ -206,6 +244,9 @@ async def process_dates(message: Message, state: FSMContext) -> None:
     await state.set_state(Form.dates)
     await state.update_data(quan=message.text)
     data = await state.get_data()
+    cursor.execute('UPDATE Users SET quan =? WHERE user_id =?;',
+                   (data['quan'], data['user_id']))
+    connection.commit()
     await message.answer(
         f"{data['name']}, укажите пожалуйста, на какие даты планируете путешествие?🗓️"
     )
@@ -218,6 +259,9 @@ async def process_quan(message: Message, state: FSMContext) -> None:
     await state.set_state(Form.nights)
     await state.update_data(dates=message.text)
     data = await state.get_data()
+    cursor.execute('UPDATE Users SET dates =? WHERE user_id =?;',
+                   (data['dates'], data['user_id']))
+    connection.commit()
     await message.answer(
         "Сколько ночей закладываете на отпуск?"
     )
@@ -230,6 +274,9 @@ async def process_nights(message: Message, state: FSMContext) -> None:
     await state.set_state(Form.budget)
     await state.update_data(nights=message.text)
     data = await state.get_data()
+    cursor.execute('UPDATE Users SET nights =? WHERE user_id =?;',
+                   (data['nights'], data['user_id']))
+    connection.commit()
     await message.answer(
         f"Спасибо! Уточните свой бюджет на поездку💵"
     )
@@ -244,6 +291,9 @@ async def process_budget(message: types.Message, state: FSMContext) -> None:
     await state.set_state(Form.messanger)
     await state.update_data(budget=message.text)
     data = await state.get_data()
+    cursor.execute('UPDATE Users SET budget =? WHERE user_id =?;',
+                   (data['budget'], data['user_id']))
+    connection.commit()
     kb = [
         [
             types.KeyboardButton(text="Позвонить📲"),
@@ -267,6 +317,9 @@ async def process_budget(message: types.Message, state: FSMContext) -> None:
 async def process_messanger(message: Message, state: FSMContext) -> None:
     await state.update_data(messanger=message.text)
     data = await state.get_data()
+    cursor.execute('UPDATE Users SET messanger =? WHERE user_id =?;',
+                   (data['messanger'], data['user_id']))
+    connection.commit()
     if data['messanger'] == "Позвонить📲" or data['messanger'] == "WhatsApp💬" or data['messanger'] == "Telegram💬":
         await state.set_state(Form.numbers)
         await message.answer(f"Для связи с вами нам потребуется номер телефона📲\n\n"
@@ -293,6 +346,9 @@ async def process_messanger(message: Message, state: FSMContext) -> None:
 async def process_numbers(message: Message, state: FSMContext, bot: Bot) -> None:
     await state.update_data(numbers=message.text)
     data = await state.get_data()
+    cursor.execute('UPDATE Users SET number =? WHERE user_id =?;',
+                   (data['numbers'], data['user_id']))
+    connection.commit()
     if data['numbers'].isdigit() and len(data['numbers']) == 11:
         inline_start = InlineKeyboardButton(
             text="Оставить еще одну заявку",
