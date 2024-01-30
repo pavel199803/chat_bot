@@ -1,16 +1,16 @@
-from aiogram import Router, Bot, types, F
-from aiogram.filters import CommandStart, Command
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import StatesGroup, State
-from aiogram.enums.parse_mode import ParseMode
-from aiogram.types import Message, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 import sqlite3
 from datetime import datetime
+
+from aiogram import Router, Bot, types, F
+from aiogram.filters import CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 router = Router()
 connection = sqlite3.connect('chat_bot.db')
 cursor = connection.cursor()
+
 
 class Form(StatesGroup):
     start_check = State()
@@ -90,9 +90,9 @@ async def process_buttons_inline_manager_press(callback: types.CallbackQuery, bo
         cursor.execute('INSERT INTO Users (user_id, username, date) VALUES (?, ?, ?)',
                        (data['user_id'], data['username'], current_time[:19]))
     await callback.message.answer(
-                                  text="Для связи с вами нам потребуется:\n\n"
-                                       "1️⃣Ваше имя. Подскажите, как мы можем к вам обращаться?"
-                                  )
+        text="Для связи с вами нам потребуется:\n\n"
+             "1️⃣Ваше имя. Подскажите, как мы можем к вам обращаться?"
+    )
 
 
 @router.callback_query(F.data == "inline_start_pressed")
@@ -109,8 +109,8 @@ async def process_buttons_inline_start_press(callback: types.CallbackQuery, stat
         connection.commit()
     await callback.answer("🛫")
     await callback.message.answer(
-                           text=f"Давайте приступим👋🏼 Подскажите, как я могу к вам обращаться?",
-                           )
+        text=f"Давайте приступим👋🏼 Подскажите, как я могу к вам обращаться?",
+    )
 
 
 @router.message(Form.start_check)
