@@ -1,4 +1,6 @@
 import sqlite3
+import requests
+import config
 from datetime import datetime
 
 from aiogram import Router, Bot, types, F
@@ -404,6 +406,25 @@ async def process_numbers(message: Message, state: FSMContext, bot: Bot) -> None
                                     f"ТГ username: @{user}\n"
                                     f"Номер телефона: {data['numbers']}"
                                )
+        url = f"https://api.u-on.ru/{config.API_key}/lead/create.json"
+        user = {
+            "source": "Telegram (бот опросник)",
+            "u_name": f"{data['name']}",
+            "u_telegram": f"{user}",
+            "u_note":
+                f"Город вылета: {data['depart_city']}\n"
+                f"Курорт: {data['resort']}\n"
+                f"Количество человек: {data['quan']}\n"
+                f"Даты поездки: {data['dates']}\n"
+                f"Количетсво ночей: {data['nights']}\n"
+                f"Бюджет: {data['budget']}\n"
+                f"Способ связи: {data['messanger']}\n",
+            "u_phone_mobile": f"+7{data['numbers'][1:]}"
+
+        }
+
+        response = requests.post(url, user)
+
     else:
         await message.answer(
             f"❗️Вы можете использовать только цифры. Напишите, пожалуйста, номер в формате 8хххххххххх")
